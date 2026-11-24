@@ -1,0 +1,12 @@
+# Derleme çıktıları
+bin/
+obj/
+.vs/
+*.user
+TestResults/
+
+# Yerel ayarlar: veritabanı şifresi içerir, depoya girmemeli.
+# Depoya appsettings.example.json girer; her makinede appsettings.json ondan kopyalanıp doldurulur.
+src/SporAnaliz.Web/appsettings.json
+src/SporAnaliz.Web/appsettings.*.json
+!src/SporAnaliz.Web/appsettings.example.json

@@ -1,0 +1,6 @@
+global using SporAnaliz.Core.Abstractions;
+global using SporAnaliz.Core.Analysis;
+global using SporAnaliz.Core.Domain;
+global using SporAnaliz.Data;
+global using SporAnaliz.Data.Feed;
+global using SporAnaliz.Data.TestData;

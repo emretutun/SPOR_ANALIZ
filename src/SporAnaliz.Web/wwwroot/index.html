@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spor Analiz</title>
+<link rel="stylesheet" href="app.css?v=28">
+</head>
+<body>
+<header class="top">
+  <div class="logo"><b>SPOR</b><span>ANALİZ</span></div>
+  <span class="test" id="badge"></span>
+  <span class="sub" id="sub"></span>
+  <nav>
+    <button id="tabMatches" class="on">Maçlar</button>
+    <button id="tabElo">Güç sıralaması</button>
+  </nav>
+</header>
+<div id="error"></div>
+
+<div class="layout" id="viewMatches">
+  <aside class="side">
+    <div class="side-h">Maçlar</div>
+    <div class="fctl">
+      <select id="fComp" title="Turnuva"></select>
+      <div id="roundCtl" style="display:none">
+        <select id="fStage" title="Sezon / aşama"></select>
+        <div class="wk"><button id="wkPrev" title="Önceki hafta">‹</button><select id="fRound" title="Hafta"></select><button id="wkNext" title="Sonraki hafta">›</button></div>
+      </div>
+      <div class="seg" id="modes">
+        <button data-m="upcoming">Yaklaşan</button><button data-m="pending" title="Tarihi geçmiş ama sonucu veritabanında olmayan maçlar">Sonucu yok</button><button data-m="played" title="Sonucu veritabanında olan maçlar">Oynanmış</button>
+      </div>
+      <input type="search" id="fQ" placeholder="Takım ara…">
+      <label class="chk"><input type="checkbox" id="fTr"> Sadece Türk takımları</label>
+      <div class="fcount" id="fCount"></div>
+    </div>
+    <div id="fixtures"></div>
+  </aside>
+  <main id="main"><div class="panel empty"><div>Soldan bir maç seçin.</div></div></main>
+</div>
+
+<div id="viewElo" class="elo-wrap" style="display:none">
+  <div class="panel">
+    <div class="panel-h"><h2>Güç sıralaması</h2></div>
+    <p class="muted" style="margin-top:0" id="eloNote"></p>
+    <table id="eloTable"></table>
+  </div>
+</div>
+
+<script src="app.js?v=28"></script>
+<script src="pitch.js?v=28"></script>
+<script>init();</script>
+</body>
+</html>
