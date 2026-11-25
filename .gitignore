@@ -10,3 +10,4 @@ TestResults/
 src/SporAnaliz.Web/appsettings.json
 src/SporAnaliz.Web/appsettings.*.json
 !src/SporAnaliz.Web/appsettings.example.json
+src/SporAnaliz.Kumanda/appsettings.json

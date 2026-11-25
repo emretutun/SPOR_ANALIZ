@@ -403,6 +403,7 @@ src/
     Simulation/        MatchSimulator: maçı dakika dakika oynatır
     Analysis/          Analyzer (hesap), AnalysisService (veriyi toplar, sonucu saklar)
     Evaluation/        Backtester: geçmişe dönük sınama
+    Playback/          Temsili maçın saniye saniye oynatılması (pitch.js'in C# karşılığı)
   SporAnaliz.Data      Veri kaynakları. Core'a bağlıdır.
     Feed/              Yerel maç veritabanı; YALNIZCA okunur
     TestData/          Üretilmiş varsayımsal veri (yalnızca geliştirme ve testler için)
@@ -410,10 +411,14 @@ src/
     Endpoints/         /api/fixtures, /api/analysis, /api/rounds, /api/teams ...
     Setup/             Veri kaynağının kaydı ve açılış
     wwwroot/           index.html, app.css, app.js (sayfa), pitch.js (2D saha)
+  SporAnaliz.Kumanda   Viz kumandası (WinForms). Core ve Data'ya bağlıdır.
+    Viz/               Viz Engine bağlantısı ve sahneye gönderilen veriler
+viz/
+  MacSim.vbs           mac_sim sahnesinin betiği (sahneyi kurar, gelen veriyi çizer)
 tools/
   SporAnaliz.Tools     Geliştirme araçları
 tests/
-  SporAnaliz.Tests     Motorun birim testleri (17 test)
+  SporAnaliz.Tests     Motorun ve oynatmanın birim testleri (30 test)
 ```
 
 Bağımlılık tek yönlüdür: **Web → Data → Core**. Core hiçbir şeye bağlı değildir; model üzerinde çalışırken veritabanına ya da sayfaya dokunmak gerekmez.
@@ -465,7 +470,53 @@ Bakılacak sayılar: isabet, log-kayıp ve RPS, tahmin edilen ve gerçek gol ile
 
 ---
 
-## 13. Sıradaki adımlar
+## 13. Viz kumandası
+
+Analizin temsili maçını Viz Engine'deki `/000_WORK/mac_sim` sahnesinde kuşbakışı, tam ekran oynatan ayrı bir Windows programı: `src/SporAnaliz.Kumanda`.
+
+### Kurulum
+
+1. `src/SporAnaliz.Kumanda/appsettings.example.json` dosyasını aynı klasöre `appsettings.json` adıyla kopyalayıp doldurun (veritabanı ve Viz adresi). Bu dosya depoya girmez.
+2. Viz Artist'te `mac_sim` sahnesi açık olmalı. Sahne betiği `viz/MacSim.vbs`'tir; sahne bir kez "Sahneyi kur" düğmesiyle kurulur ve kaydedilir.
+3. Programı Visual Studio'da başlangıç projesi seçip çalıştırın ya da `dotnet run --project src/SporAnaliz.Kumanda`.
+
+### Kullanım
+
+Her adımın kendi düğmesi ve kısayolu vardır:
+
+| Düğme | Kısayol | Ne yapar |
+|---|---|---|
+| BAĞLAN | | Viz Engine'e bağlanır (varsayılan 127.0.0.1:6100). Üst şeritte sahnenin hazır olup olmadığı görünür. |
+| ANALİZ ET | F2 | Soldan seçilen maçı analiz eder (10.000 simülasyon), oynatılacak maçı hazırlar. Maça çift tıklamak da aynıdır. |
+| VİZ'E YÜKLE | F3 | Kadro, renkler, tabela ve başlama dizilişini sahneye gönderir. |
+| OYNAT | F5 | Maçı oynatır; ortadaki önizleme Viz'de görünenin aynısıdır. |
+| DURAKLAT | F6 | Durdurur; OYNAT kaldığı yerden sürdürür. |
+| BAŞTAN | F7 | Maçı başa alır ve sahneyi başlama dizilişine döndürür. |
+| HIZ 1x / 2x / 4x | | Oynatma hızı. 1x'te maç yaklaşık 1 dakika sürer. |
+| TEMİZLE | F8 | Ekrandaki bandı ve etiketi kapatır. |
+
+Maçlar turnuva → aşama → hafta ile ya da "Tüm turnuvalar" seçilip tarih aralığıyla listelenir; üstteki kutu takım adına göre süzer. Viz bağlı değilken de OYNAT çalışır, yalnızca önizleme oynar.
+
+### Sahneyle konuşma
+
+Program sahneye yalnızca Viz'in paylaşımlı belleğine (`VIZ_COMMUNICATION*MAP`) yazar; sahnedeki betik değişiklikleri görür ve çizer. Sahne ağacına komut gönderilmez, bu yüzden Artist düzenleme modundayken de çalışır.
+
+| Anahtar | Biçim | Anlamı |
+|---|---|---|
+| `sim_poz` | `x,y[,0];…` 22 oyuncu + top | Konumlar 0–1 arası (x sağa, y aşağı). `,0` gizle (kırmızı kart, top oyun dışı). Saniyede ~10 kez gelir; sahne aradaki kareleri doldurur. |
+| `sim_kadro` | `no\|ad;…` 22 oyuncu | Forma numaraları ve isimler (değişiklikte yenilenir). |
+| `sim_renk` | `r,g,b;r,g,b` | Ev ve deplasman renkleri. |
+| `sim_metin` | `EV_AD=…\|DEP_AD=…\|SKOR=…\|DAKIKA=…` | Tabela. |
+| `sim_sahip` | oyuncu sırası ya da `-1` | Topu taşıyan oyuncunun isim etiketi. |
+| `sim_bant` | `başlık\|alt\|r,g,b\|saniye` | Alt bant (GOL, KIRMIZI KART, DEVRE ARASI, MAÇ SONU). Boş değer kapatır, 0 saniye kalıcıdır. |
+| `sim_etiket` | `metin\|r,g,b\|saniye` | Küçük olay etiketi (şut, korner, kart, değişiklik). |
+| `sim_durum` | sahne yazar | Sahnenin her saniye yazdığı durum; program bağlantıyı bununla denetler. |
+
+Viz yalnızca değer değişince sahneye haber verir; program aynı bandı tekrar göstermek için önce boş değer yazar.
+
+---
+
+## 14. Sıradaki adımlar
 
 Öncelik sırasıyla:
 
@@ -473,7 +524,7 @@ Bakılacak sayılar: isabet, log-kayıp ve RPS, tahmin edilen ve gerçek gol ile
 2. **Kadroya duyarlı güç.** Bugünkü 11'in, takımın gücünü üreten 11'lerden ne kadar farklı olduğunu ölçmek. Asıl değeri yayında: "kadro açıklandı, tahmin şöyle değişti" diyebilmek. Bunun için sakatlık ve ceza bilgisi gerekir; veride yoktur. İki yol var: editörün panelden elle girmesi ya da ek bir veri servisi (sakatlık ve tahmini ilk 11 satan sağlayıcılar mevcut).
 3. **Lig seviyesi düzeltmesi.** İngiliz takımlarının Avrupa'da zayıf görünmesini hedefler.
 4. **Takıma özel iç saha ve dinlenme süresi.** İkisi de veride hazır ve küçük işlerdir.
-5. **Yayın ekranı ve operatör paneli.** 1920×1080 tam ekran grafik ve onu yöneten bir panel; henüz yapılmadı.
+5. **Yayın ekranı.** Viz'de kuşbakışı oynatma ve kumandası hazır (bölüm 13); tasarımın yayın grafikleriyle uyumlu hâle getirilmesi kaldı.
 6. **Yapay zeka yorumu.** Şablon cümleler yerine üretilmiş yorum metni; isteğe bağlı, ücretli.
 
 ### Yayına çıkmadan önce

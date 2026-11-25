@@ -4,3 +4,4 @@ global using SporAnaliz.Core.Domain;
 global using SporAnaliz.Core.Model;
 global using SporAnaliz.Core.Simulation;
 global using SporAnaliz.Core.Evaluation;
+global using SporAnaliz.Core.Playback;
