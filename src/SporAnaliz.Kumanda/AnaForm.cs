@@ -5,6 +5,7 @@ using SporAnaliz.Core.Analysis;
 using SporAnaliz.Core.Domain;
 using SporAnaliz.Core.Model;
 using SporAnaliz.Core.Playback;
+using SporAnaliz.Data.Atak;
 using SporAnaliz.Data.Feed;
 using SporAnaliz.Kumanda.Viz;
 
@@ -18,21 +19,22 @@ namespace SporAnaliz.Kumanda;
 public sealed partial class AnaForm : Form
 {
     // ---- renkler (göz yormaması için düşük karşıtlıklı koyu tema; tasarım dosyasındakilerle aynı)
-    static readonly Color Zemin = Color.FromArgb(24, 27, 33);
-    static readonly Color Yuzey = Color.FromArgb(31, 35, 43);
-    static readonly Color Satir = Color.FromArgb(36, 40, 49);
-    static readonly Color Satir2 = Color.FromArgb(40, 44, 54);
-    static readonly Color Dugme = Color.FromArgb(42, 47, 57);
-    static readonly Color DugmeUstu = Color.FromArgb(52, 58, 70);
-    static readonly Color Yazi = Color.FromArgb(226, 230, 236);
-    static readonly Color Soluk = Color.FromArgb(140, 149, 163);
-    static readonly Color Mavi = Color.FromArgb(58, 110, 168);      // sıradaki adım, seçili satır, seçili hız
-    static readonly Color MaviUstu = Color.FromArgb(68, 122, 182);
-    static readonly Color Yesil = Color.FromArgb(52, 130, 92);      // oynat
-    static readonly Color YesilUstu = Color.FromArgb(62, 144, 104);
-    static readonly Color YaziYesil = Color.FromArgb(124, 196, 150);
-    static readonly Color YaziSari = Color.FromArgb(214, 180, 100);
-    static readonly Color YaziKirmizi = Color.FromArgb(222, 120, 120);
+    // ---- renkler: tasarım ekranındaki "gorunum" bileşeninden (Properties penceresinde değiştirilir)
+    Color Zemin => gorunum.ZeminRengi;
+    Color Yuzey => gorunum.YuzeyRengi;
+    Color Satir => gorunum.SatirRengi;
+    Color Satir2 => gorunum.Satir2Rengi;
+    Color Dugme => gorunum.DugmeRengi;
+    Color DugmeUstu => gorunum.DugmeUstuRengi;
+    Color Yazi => gorunum.YaziRengi;
+    Color Soluk => gorunum.SolukYaziRengi;
+    Color Mavi => gorunum.VurguRengi;          // sıradaki adım, seçili satır, seçili hız, seçili sekme
+    Color MaviUstu => gorunum.VurguUstuRengi;
+    Color Yesil => gorunum.OynatRengi;         // oynat
+    Color YesilUstu => gorunum.OynatUstuRengi;
+    Color YaziYesil => gorunum.BasariRengi;
+    Color YaziSari => gorunum.UyariRengi;
+    Color YaziKirmizi => gorunum.HataRengi;
     static readonly CultureInfo Tr = CultureInfo.GetCultureInfo("tr-TR");
 
     readonly KumandaAyarlari _ayar;
@@ -59,6 +61,13 @@ public sealed partial class AnaForm : Form
 
         InitializeComponent();
 
+        // Sekmeler tasarım ekranında normal sekme olarak görünür (tıklayıp içine Toolbox'tan kontrol bırakılabilir).
+        // Çalışırken başlıkları gizlenir; geçiş üstteki SİMÜLASYON / CANLI MAÇ düğmeleriyle yapılır.
+        tabSekmeler.Appearance = TabAppearance.FlatButtons;
+        tabSekmeler.ItemSize = new Size(0, 1);
+        tabSekmeler.SizeMode = TabSizeMode.Fixed;
+        tabSekmeler.SelectedIndexChanged += (_, _) => SekmeleriBoya();
+
         txtHost.Text = ayar.VizHost;
         txtPort.Text = ayar.VizPort.ToString(CultureInfo.InvariantCulture);
         dtBas.Value = DateTime.Today;
@@ -69,8 +78,35 @@ public sealed partial class AnaForm : Form
             Durum();
         });
 
+        // Canlı maç sekmesi: gol atakları yalnızca yerel htspor_tahmin veritabanına kaydedilir
+        AtakDeposu? depo = null;
+        string? depoHata = null;
+        try { depo = new AtakDeposu(ayar.Veri); }
+        catch (Exception ex) { depoHata = ex.Message; }
+        CanliBaslat(depo, depoHata);
+
         HizSec(1);
+        SekmeSec(false);
         Durum();
+    }
+
+    // ---------------------------------------------------------------- sekmeler
+
+    void btnSekmeSim_Click(object? sender, EventArgs e) => SekmeSec(false);
+    void btnSekmeCanli_Click(object? sender, EventArgs e) => SekmeSec(true);
+
+    void SekmeSec(bool canliMac)
+    {
+        if (canliMac && _oynuyor) Duraklat();
+        tabSekmeler.SelectedTab = canliMac ? tabCanli : tabSim;
+        SekmeleriBoya();
+    }
+
+    void SekmeleriBoya()
+    {
+        bool canliMac = tabSekmeler.SelectedTab == tabCanli;
+        Vurgula(btnSekmeSim, canliMac ? null : Mavi);
+        Vurgula(btnSekmeCanli, canliMac ? Mavi : null);
     }
 
     // ---------------------------------------------------------------- tasarım ekranının bağladığı olaylar
@@ -102,6 +138,11 @@ public sealed partial class AnaForm : Form
     protected override void OnKeyDown(KeyEventArgs e)
     {
         base.OnKeyDown(e);
+        if (tabSekmeler.SelectedTab == tabCanli)
+        {
+            if (CanliTusIsle(e)) { e.Handled = true; e.SuppressKeyPress = true; }
+            return;
+        }
         switch (e.KeyCode)
         {
             case Keys.F2: _ = AnalizEt(); break;
@@ -414,12 +455,19 @@ public sealed partial class AnaForm : Form
     }
 
     // Sahnedeki betik her saniye durumunu "sim_durum" anahtarına yazar; okuyup sahnenin hazır olduğunu anlarız
+    bool _sahneEski;
+
     async Task SahneDurumu()
     {
         if (!_viz.Bagli) { if (!lblViz.Text.Contains("Bağlanamadı")) VizDurumu("● Bağlı değil", Soluk); Durum(); return; }
         var yanit = await _viz.SorAsync("VIZ_COMMUNICATION*MAP GET_STRING_ELEMENT \"sim_durum\"", 1500);
         if (yanit == null) VizDurumu("● Bağlı · yanıt yok", YaziSari);
-        else if (yanit.Contains("bagli=1")) VizDurumu("● Bağlı · mac_sim sahnesi hazır", YaziYesil);
+        else if (yanit.Contains("bagli=1") && !yanit.Contains("atak=1"))
+        {
+            VizDurumu("● Bağlı · sahne ESKİ: betiği güncelleyip 'Sahneyi kur'a basın", YaziSari);
+            _sahneEski = true;
+        }
+        else if (yanit.Contains("bagli=1")) { VizDurumu("● Bağlı · mac_sim sahnesi hazır", YaziYesil); _sahneEski = false; }
         else VizDurumu("● Bağlı · mac_sim sahnesi yanıt vermiyor", YaziSari);
         Durum();
     }
@@ -446,11 +494,11 @@ public sealed partial class AnaForm : Form
         Vurgula(btnOynat, hazir && !_oynuyor ? Yesil : null);
     }
 
-    static void Vurgula(Button b, Color? renk)
+    void Vurgula(Button b, Color? renk)
     {
         b.BackColor = renk ?? Dugme;
         b.FlatAppearance.MouseOverBackColor = renk == null ? DugmeUstu : renk == Yesil ? YesilUstu : MaviUstu;
-        b.FlatAppearance.BorderColor = renk ?? Color.FromArgb(58, 64, 77);
+        b.FlatAppearance.BorderColor = renk ?? gorunum.KenarRengi;
         b.ForeColor = Yazi;
     }
 

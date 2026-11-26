@@ -32,6 +32,12 @@ public sealed class FixtureRow
     public string AwayShort { get; set; } = "";
     public string AwayColor { get; set; } = "";
     public long HasAnalysis { get; set; }
+    /// <summary>Kaynaktaki durum adı (Başlamadı, 1. Yarı, Devre Arası, Tamamlandı...). Yalnızca canlı listede dolu.</summary>
+    public string StatusName { get; set; } = "";
+    /// <summary>Maç şu an oynanıyor (1. yarı, devre arası, 2. yarı, uzatma, penaltılar).</summary>
+    public bool Live { get; set; }
+    public int? Minute { get; set; }
+    public int? Stoppage { get; set; }
 }
 
 public sealed class TeamStatAvg

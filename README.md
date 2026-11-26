@@ -403,10 +403,11 @@ src/
     Simulation/        MatchSimulator: maçı dakika dakika oynatır
     Analysis/          Analyzer (hesap), AnalysisService (veriyi toplar, sonucu saklar)
     Evaluation/        Backtester: geçmişe dönük sınama
-    Playback/          Temsili maçın saniye saniye oynatılması (pitch.js'in C# karşılığı)
+    Playback/          Temsili maçın saniye saniye oynatılması (pitch.js'in C# karşılığı); çizilen gol atağının zamanlaması (AtakPlani)
   SporAnaliz.Data      Veri kaynakları. Core'a bağlıdır.
     Feed/              Yerel maç veritabanı; YALNIZCA okunur
     TestData/          Üretilmiş varsayımsal veri (yalnızca geliştirme ve testler için)
+    Atak/              Çizilen gol atakları (yerel htspor_tahmin veritabanı, gol_atak tablosu)
   SporAnaliz.Web       HTTP uçları ve sayfa. Core ve Data'ya bağlıdır.
     Endpoints/         /api/fixtures, /api/analysis, /api/rounds, /api/teams ...
     Setup/             Veri kaynağının kaydı ve açılış
@@ -418,7 +419,7 @@ viz/
 tools/
   SporAnaliz.Tools     Geliştirme araçları
 tests/
-  SporAnaliz.Tests     Motorun ve oynatmanın birim testleri (30 test)
+  SporAnaliz.Tests     Motorun, oynatmanın ve atak planının birim testleri (35 test)
 ```
 
 Bağımlılık tek yönlüdür: **Web → Data → Core**. Core hiçbir şeye bağlı değildir; model üzerinde çalışırken veritabanına ya da sayfaya dokunmak gerekmez.
@@ -513,6 +514,27 @@ Program sahneye yalnızca Viz'in paylaşımlı belleğine (`VIZ_COMMUNICATION*MA
 | `sim_durum` | sahne yazar | Sahnenin her saniye yazdığı durum; program bağlantıyı bununla denetler. |
 
 Viz yalnızca değer değişince sahneye haber verir; program aynı bandı tekrar göstermek için önce boş değer yazar.
+
+### Canlı maç: gol atağı
+
+Kumandanın ikinci sekmesi (**CANLI MAÇ · GOL ATAĞI**). Gerçek bir maçta gol olunca operatör atağı sahaya çizer, Viz golün nasıl geldiğini canlandırır: dokunuş noktaları, pas (düz çizgi), top sürme (kesikli çizgi), şut, formalar ve altta atakta yer alan oyuncular ile pas sayısı. Atak her zaman sağdaki kaleye akar.
+
+1. Soldan günü ve maçı seçin. Kadro ve takım renkleri gelir.
+2. Golü atan takımı seçin, dakikayı ve skoru girin.
+3. Atağın başladığı yere tıklayın, sağdan oyuncuyu seçin (ya da numarasını yazın).
+4. Pas: yeni yere tıklayıp oyuncuyu seçin. Top sürme: yalnızca tıklayın (aynı oyuncu devam eder).
+5. Son nokta golü atan oyuncudur; kaleye şut kendiliğinden çizilir.
+6. **ÖNİZLE (F4)** ile kumandada, **VİZ'E GÖNDER (F5)** ile yayında oynatın. **VİZ'DEN KALDIR (F8)** kapatır.
+
+Sağ tık noktayı siler, noktalar sürüklenerek taşınır, Ctrl+Z son noktayı geri alır.
+
+Gönderilen her atak yerel MySQL'deki kendi veritabanımıza (`htspor_tahmin`, tablo `gol_atak`) kaydedilir; maç seçilince o maçın kayıtlı golleri listelenir ve tek tıkla yeniden açılıp gönderilebilir. Kayıt yalnızca bu bilgisayardaki sunucuya yapılır: bağlantı dizesi başka bir sunucuyu gösterirse ya da maç veritabanını gösterirse kayıt kapanır.
+
+Sahne tarafında bunun için `viz/MacSim.vbs` betiğinin güncel hâli gerekir: betiği SIM konteynerine yeniden yapıştırıp derleyin, **Sahneyi kur** düğmesine basın ve sahneyi kaydedin.
+
+| Anahtar | Biçim | Anlamı |
+|---|---|---|
+| `sim_atak` | `r,g,b\|başlık\|oyuncular\|öğe;öğe;…` | Çizilen atak. Öğeler: `C` çizgi parçası, `N` nokta, `F` forma, `P` alt panel (ayrıntı betiğin başında). Boş değer kapatır. |
 
 ---
 

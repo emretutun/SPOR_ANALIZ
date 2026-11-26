@@ -23,6 +23,8 @@ public interface IMatchData
     /// <summary>Bir turnuvanın sezonları/aşamaları ve her birinin haftaları.</summary>
     List<StageInfo> GetStages(int competitionId) => new();
     List<FixtureRow> GetRoundMatches(int competitionId, int stageId, string round) => new();
+    /// <summary>Canlı ekran için tarih aralığındaki BÜTÜN maçlar (oynanmış, oynanıyor, oynanacak), anlık skorla; önbelleğe bakmadan okunur.</summary>
+    List<FixtureRow> GetDayMatches(DateTime from, DateTime to) => GetMatches(from, to);
     /// <summary>Maç kadrosu: açıklandıysa gerçek ilk 11, açıklanmadıysa son maçlardan muhtemel 11. Veri yoksa null.</summary>
     MatchLineups? GetLineups(FixtureRow match) => null;
     /// <summary>Takım → lig/ülke grubu (güç hesabında seviye tespiti için). Yoksa null.</summary>

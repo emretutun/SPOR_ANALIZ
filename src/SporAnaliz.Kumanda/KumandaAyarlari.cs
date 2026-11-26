@@ -20,6 +20,10 @@ public sealed class KumandaAyarlari
         if (!File.Exists(Yol))
             throw new FileNotFoundException("appsettings.json bulunamadı. appsettings.example.json dosyasını appsettings.json adıyla kopyalayıp doldurun.", Yol);
         var veri = DataOptions.FromJsonFile(Yol);
+        // Kumanda yalnızca bu bilgisayardaki MySQL ile çalışır: başka bir sunucuya bağlanmaz
+        var sunucu = (new MySqlConnector.MySqlConnectionStringBuilder(veri.ConnectionString).Server ?? "").Trim().ToLowerInvariant();
+        if (sunucu is not ("localhost" or "127.0.0.1" or "::1"))
+            throw new InvalidOperationException($"Kumanda yalnızca bu bilgisayardaki veritabanıyla çalışır (appsettings.json'daki sunucu: {sunucu}).");
         using var doc = JsonDocument.Parse(File.ReadAllText(Yol), new JsonDocumentOptions { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
         string host = "127.0.0.1";
         int port = 6100, hz = 10;

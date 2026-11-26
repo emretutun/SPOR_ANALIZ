@@ -61,6 +61,7 @@ public sealed class VizYayin(VizBaglanti viz)
         Yaz("sim_sahip", "-1", zorla: true);
         _sonSahip = -1;
         Yaz("sim_poz", Konumlar(p), zorla: true);
+        Yaz("sim_atak", "", zorla: true);
     }
 
     /// <summary>Her gönderim anında: oyuncu ve top konumları, topu taşıyan oyuncu, dakika.</summary>
@@ -145,6 +146,86 @@ public sealed class VizYayin(VizBaglanti viz)
         Yaz("sim_etiket", "", zorla: true);
         Yaz("sim_sahip", "-1", zorla: true);
         _sonSahip = -1;
+    }
+
+    // ---------------------------------------------------------------- canlı maç: gol atağı
+
+    /// <summary>Canlı maç için sahneyi hazırlar: renkler, tabela; oyuncular ve top gizlenir, bant ve etiket kapanır.</summary>
+    public void CanliHazirla(string evAd, string depAd, int skorEv, int skorDep, string dakika, Rgb ev, Rgb dep)
+    {
+        Yaz("sim_renk", $"{ev};{dep}");
+        Yaz("sim_metin", $"EV_AD={evAd.ToUpper(Tr)}|DEP_AD={depAd.ToUpper(Tr)}|SKOR={skorEv} - {skorDep}|DAKIKA={dakika}");
+        Yaz("sim_poz", string.Join(";", Enumerable.Repeat("0.5000,0.5000,0", 23)));
+        Yaz("sim_sahip", "-1");
+        _sonSahip = -1;
+        Yaz("sim_bant", "", zorla: true);
+        Yaz("sim_etiket", "", zorla: true);
+    }
+
+    /// <summary>Çizilmiş atağı sahnede baştan oynatır.</summary>
+    public void Atak(AtakPlani plan, Rgb renk, string baslik, string oyuncular) =>
+        Yaz("sim_atak", AtakMetni(plan, renk, baslik, oyuncular), zorla: true);
+
+    public void AtakKapat() => Yaz("sim_atak", "", zorla: true);
+
+    /// <summary>Sahnedeki hazır parça sayısı (viz/MacSim.vbs ile aynı).</summary>
+    public const int SahneCizgi = 80, SahneNokta = 16, SahneForma = 16;
+    /// <summary>Formanın noktanın ne kadar üstünde durduğu (metre); kumandadaki çizimle aynı görünüm.</summary>
+    const double FormaUstu = 2.9;
+
+    /// <summary>sim_atak değeri: "r,g,b|başlık|oyuncular|öğeler" (biçim için viz/MacSim.vbs başındaki açıklamaya bakın).</summary>
+    public static string AtakMetni(AtakPlani plan, Rgb renk, string baslik, string oyuncular)
+    {
+        static string F(double v) => v.ToString("0.###", Inv);
+        static (double X, double Y) M(Vec v) => ((v.X - 0.5) * AtakPlani.SahaBoy, (0.5 - v.Y) * AtakPlani.SahaEn);
+
+        // Top sürme kesikli çizilir: parça sayısı sahnedeki havuzu aşarsa kesikler uzatılır
+        double kesik = 1.6, bosluk = 1.1;
+        int duz = plan.Cizgiler.Count(c => c.Tur != AtakCizgiTuru.Surus);
+        for (int deneme = 0; deneme < 12; deneme++)
+        {
+            int gerek = duz + plan.Cizgiler.Where(c => c.Tur == AtakCizgiTuru.Surus)
+                .Sum(c => Math.Max(1, (int)Math.Floor((AtakPlani.Metre(c.Bas, c.Son) + bosluk) / (kesik + bosluk))));
+            if (gerek <= SahneCizgi) break;
+            kesik *= 1.3;
+            bosluk *= 1.3;
+        }
+
+        var oge = new List<string>();
+        foreach (var c in plan.Cizgiler)
+        {
+            var (ax, ay) = M(c.Bas);
+            var (bx, by) = M(c.Son);
+            double dx = bx - ax, dy = by - ay, L = Math.Sqrt(dx * dx + dy * dy);
+            if (L < 0.05) continue;
+            double ux = dx / L, uy = dy / L, aci = Math.Atan2(dy, dx) * 180 / Math.PI;
+            if (c.Tur != AtakCizgiTuru.Surus)
+            {
+                double kal = c.Tur == AtakCizgiTuru.Sut ? 0.45 : 0.38;
+                oge.Add($"C,{F(c.T0)},{F(c.Sure)},{F(ax)},{F(ay)},{F(dx)},{F(dy)},{F(L)},{F(aci)},{F(kal)}");
+                continue;
+            }
+            int n = Math.Max(1, (int)Math.Floor((L + bosluk) / (kesik + bosluk)));
+            for (int k = 0; k < n; k++)
+            {
+                double s0 = k * (kesik + bosluk), uz = Math.Min(kesik, L - s0);
+                if (uz <= 0.05) break;
+                oge.Add($"C,{F(c.T0 + c.Sure * s0 / L)},{F(c.Sure * uz / L)},{F(ax + ux * s0)},{F(ay + uy * s0)},{F(ux * uz)},{F(uy * uz)},{F(uz)},{F(aci)},0.32");
+            }
+        }
+        foreach (var n in plan.Noktalar.Take(SahneNokta))
+        {
+            var (x, y) = M(n.Yer);
+            oge.Add($"N,{F(n.T0)},{F(x)},{F(y)}");
+        }
+        foreach (var n in plan.Noktalar.Where(n => n.Forma).Take(SahneForma))
+        {
+            var (x, y) = M(n.Yer);
+            oge.Add($"F,{F(n.T0)},{F(x)},{F(y + FormaUstu)},{n.Numara},{n.Ad.Replace(',', ' ').Replace(';', ' ').Replace('|', ' ')}");
+        }
+        oge.Add($"P,{F(plan.PanelT0)}");
+        static string Temiz(string s) => s.Replace('|', '/').Replace(';', ',');
+        return $"{renk}|{Temiz(baslik)}|{Temiz(oyuncular)}|{string.Join(";", oge)}";
     }
 
     string Metin() => $"EV_AD={_evAd}|DEP_AD={_depAd}|SKOR={_skor}|DAKIKA={_dakika}";

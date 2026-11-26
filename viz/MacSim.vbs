@@ -27,6 +27,13 @@
 '   sim_sahip  topu taşıyan oyuncunun sırası (0-21), -1 = kimse
 '   sim_bant   "başlık|alt yazı|r,g,b|saniye"   boş metin bandı kapatır; saniye 0 = kalıcı
 '   sim_etiket "metin|r,g,b|saniye"             boş metin etiketi kapatır
+'   sim_atak   operatörün çizdiği gol atağı; boş metin kapatır. Biçim:
+'              "r,g,b|başlık|oyuncular|öğe;öğe;..."  (r,g,b = atak yapan takımın rengi)
+'              öğeler (metre ve saniye; süre atağın başından sayılır):
+'                C,t0,süre,x,y,dx,dy,uzunluk,açı,kalınlık   çizgi parçası: (x,y) noktasından (dx,dy) yönünde uzar
+'                N,t0,x,y                                   dokunuş noktası
+'                F,t0,x,y,numara[,ad]                       forma (ad formanın üstünde yazar)
+'                P,t0                                       alt panel
 ' ============================================================================
 
 dim kurDurum as Integer          ' 0 hazır, 1 şekiller ölçülüyor, 2-3 ekran ölçülüyor, 4 bitti
@@ -60,6 +67,14 @@ dim alanSay as Integer
 dim ilkHam as Double
 dim sonDurum as Double
 dim evR, evG, evB, depR, depG, depB as Integer
+
+' Gol atağı (sim_atak): sahnede hazır duran parçalar ve oynatma bilgisi
+dim atak, atakPanel, aTop as Container
+dim aC, aN, aF, aFGovde, aFHalka, aFNo, aFAd, aFAdArka as Array[Container]
+dim cT0, cDur, cSx, cSy, cDx, cDy, cLen, cKal, nT0, fT0 as Array[Double]
+dim cSay, nSay, fSay as Integer
+dim atakBas, panelT0, topBasX, topBasY as Double
+dim atakAktif as Boolean
 
 ' ---------------------------------------------------------------- parametreler
 
@@ -96,6 +111,18 @@ sub OnInit()
 	m.RegisterChangedCallback("sim_sahip")
 	m.RegisterChangedCallback("sim_bant")
 	m.RegisterChangedCallback("sim_etiket")
+	m.RegisterChangedCallback("sim_atak")
+	cT0.Size = 80
+	cDur.Size = 80
+	cSx.Size = 80
+	cSy.Size = 80
+	cDx.Size = 80
+	cDy.Size = 80
+	cLen.Size = 80
+	cKal.Size = 80
+	nT0.Size = 16
+	fT0.Size = 16
+	atakAktif = false
 end sub
 
 sub OnExecAction(buttonId as Integer)
@@ -139,7 +166,10 @@ sub DurumYaz()
 	simdi = Saat()
 	if simdi - sonDurum < 1.0 then exit sub
 	sonDurum = simdi
-	VizCommunication.Map["sim_durum"] = "ham=" & CStr(System.GetElapsedTime()) & " birim=" & CStr(birim) & " olculdu=" & CStr(birimBelli) & " kare=" & CStr(alanSay) & " bagli=" & CStr(bagli) & " bantBitis=" & CStr(bantBitis) & " saat=" & CStr(simdi) & " dt=" & CStr(dt)
+	dim atakVar as Integer
+	atakVar = 0
+	if atak <> null then atakVar = 1
+	VizCommunication.Map["sim_durum"] = "ham=" & CStr(System.GetElapsedTime()) & " birim=" & CStr(birim) & " olculdu=" & CStr(birimBelli) & " kare=" & CStr(alanSay) & " bagli=" & CStr(bagli) & " atak=" & CStr(atakVar) & " bantBitis=" & CStr(bantBitis) & " saat=" & CStr(simdi) & " dt=" & CStr(dt)
 end sub
 
 function Iki(n as Integer) as String
@@ -372,6 +402,29 @@ sub Kur()
 	Dikdortgen(isim, "ISIM_ARKA", 0.0, 0.0, 0.0, 9.0, 2.3, 8, 11, 17, 86.0)
 	Yazi(isim, "ISIM_YAZI", 0.0, 0.0, 0.02, 1.3, TEXT_ORIENTATION_CENTER, "Oyuncu", 255, 255, 255)
 
+	' ---- gol atağı: kumandanın dolduracağı hazır parçalar (80 çizgi parçası, 16 nokta, 16 forma, top)
+	' Çizgi parçası: dış konteyner uzunluk ve açıyı taşır, içindeki 1 x 1 metrelik dikdörtgen şekli.
+	dim atakG, ap as Container
+	atakG = Grup(saha, "ATAK", 0.0, 0.0, 0.6)
+	for i = 0 to 79
+		p = Grup(atakG, "A_C" & Iki(i), 0.0, 0.0, 0.0)
+		Dikdortgen(p, "G", 0.0, 0.0, 0.0, 1.0, 1.0, 255, 255, 255, 92.0)
+	next
+	for i = 0 to 15
+		Daire(atakG, "A_N" & Iki(i), 0.0, 0.0, 0.05, 1.2, 255, 255, 255, 100.0)
+	next
+	for i = 0 to 15
+		p = Grup(atakG, "A_F" & Iki(i), 0.0, 0.0, 0.1)
+		Daire(p, "HALKA", 0.0, 0.0, 0.0, 4.0, 255, 255, 255, 95.0)
+		Daire(p, "GOVDE", 0.0, 0.0, 0.02, 3.4, 232, 163, 23, 100.0)
+		Yazi(p, "NO", 0.0, 0.0, 0.04, 1.7, TEXT_ORIENTATION_CENTER, "10", 17, 17, 17)
+		Dikdortgen(p, "AD_ARKA", 0.0, 3.3, 0.05, 10.0, 2.2, 8, 11, 17, 82.0)
+		Yazi(p, "AD", 0.0, 3.3, 0.07, 1.3, TEXT_ORIENTATION_CENTER, "Oyuncu", 255, 255, 255)
+	next
+	p = Grup(atakG, "A_TOP", 0.0, 0.0, 0.2)
+	Daire(p, "GOLGE", 0.15, -0.3, 0.0, 1.6, 0, 0, 0, 40.0)
+	Daire(p, "TOP_IC", 0.0, 0.0, 0.02, 1.4, 255, 255, 255, 100.0)
+
 	' ---- ekran katmanı (piksel)
 	ekran = Grup(this, "EKRAN", 0.0, 0.0, 1.0)
 
@@ -398,6 +451,13 @@ sub Kur()
 	Dikdortgen(etiket, "E_ARKA", 0.0, 0.0, 0.0, 760.0, 50.0, 8, 11, 17, 88.0)
 	Daire(etiket, "E_NOKTA", -350.0, 0.0, 0.5, 16.0, 232, 163, 23, 100.0)
 	Yazi(etiket, "E_YAZI", 12.0, 0.0, 1.0, 24.0, TEXT_ORIENTATION_CENTER, "23'  KORNER  ·  Takım", 255, 255, 255)
+
+	' ---- gol atağının alt paneli: başlık ve atakta yer alan oyuncular
+	ap = Grup(ekran, "ATAK_PANEL", 0.0, -430.0, 3.5)
+	Dikdortgen(ap, "AP_ARKA", 0.0, 0.0, 0.0, 1240.0, 140.0, 8, 11, 17, 90.0)
+	Dikdortgen(ap, "AP_SERIT", 0.0, 67.0, 0.5, 1240.0, 6.0, 227, 6, 19, 100.0)
+	Yazi(ap, "AP_BASLIK", 0.0, 26.0, 1.0, 38.0, TEXT_ORIENTATION_CENTER, "GOL", 255, 255, 255)
+	Yazi(ap, "AP_OYUNCULAR", 0.0, -30.0, 1.0, 28.0, TEXT_ORIENTATION_CENTER, "Oyuncular", 210, 216, 226)
 
 	bekle = 0
 	kurDurum = 1
@@ -447,6 +507,7 @@ sub KurulumuTamamla()
 		isim.Active = false
 		bant.Active = false
 		etiket.Active = false
+		AtakGizle()
 		println("Kurulum tamamlandı. Sahneyi kaydedebilirsiniz.")
 	end if
 end sub
@@ -510,6 +571,7 @@ sub Baglan()
 		ty[i] = fy[i]
 	next
 	oy.Push(saha.FindSubContainer("TOP"))
+	AtakBagla()
 	fx[22] = oy[22].Position.x
 	fy[22] = oy[22].Position.y
 	tx[22] = fx[22]
@@ -569,6 +631,7 @@ sub OnExecPerField()
 		etiket.Active = false
 		etiketBitis = 0.0
 	end if
+	if atakAktif then AtakCiz()
 end sub
 
 sub OnSharedMemoryVariableChanged(map as SharedMemory, mapKey as String)
@@ -589,6 +652,8 @@ sub OnSharedMemoryVariableChanged(map as SharedMemory, mapKey as String)
 		BantAl(s)
 	elseif mapKey = "sim_etiket" then
 		EtiketAl(s)
+	elseif mapKey = "sim_atak" then
+		AtakAl(s)
 	end if
 end sub
 
@@ -780,4 +845,183 @@ sub EtiketAl(s as String)
 	else
 		etiketBitis = 0.0
 	end if
+end sub
+
+' ---------------------------------------------------------------- gol atağı
+
+' Kurulmuş sahnedeki atak parçalarını bulur (sahne bu betiğin eski sürümüyle kurulduysa atak = null kalır)
+sub AtakBagla()
+	dim i as Integer
+	atak = saha.FindSubContainer("ATAK")
+	atakPanel = ekran.FindSubContainer("ATAK_PANEL")
+	aC.Clear()
+	aN.Clear()
+	aF.Clear()
+	aFGovde.Clear()
+	aFHalka.Clear()
+	aFNo.Clear()
+	aFAd.Clear()
+	aFAdArka.Clear()
+	if atak = null or atakPanel = null then
+		atak = null
+		exit sub
+	end if
+	for i = 0 to 79
+		aC.Push(atak.FindSubContainer("A_C" & Iki(i)))
+	next
+	for i = 0 to 15
+		aN.Push(atak.FindSubContainer("A_N" & Iki(i)))
+		aF.Push(atak.FindSubContainer("A_F" & Iki(i)))
+		aFGovde.Push(aF[i].FindSubContainer("GOVDE"))
+		aFHalka.Push(aF[i].FindSubContainer("HALKA"))
+		aFNo.Push(aF[i].FindSubContainer("NO"))
+		aFAd.Push(aF[i].FindSubContainer("AD"))
+		aFAdArka.Push(aF[i].FindSubContainer("AD_ARKA"))
+	next
+	aTop = atak.FindSubContainer("A_TOP")
+	AtakGizle()
+end sub
+
+sub AtakGizle()
+	dim i as Integer
+	atakAktif = false
+	if atak = null then exit sub
+	for i = 0 to aC.UBound
+		aC[i].Active = false
+	next
+	for i = 0 to aN.UBound
+		aN[i].Active = false
+		aF[i].Active = false
+	next
+	aTop.Active = false
+	atakPanel.Active = false
+	atak.Active = false
+end sub
+
+sub AtakAl(s as String)
+	dim bas, oge, al, rgb as Array[String]
+	dim i, r, g, b as Integer
+	AtakGizle()
+	if s = "" then exit sub
+	if atak = null then
+		println("Sahnede ATAK katmanı yok: betiği güncelleyip 'Sahneyi kur' düğmesine basın.")
+		exit sub
+	end if
+	s.Split("|", bas)
+	if bas.Size < 4 then exit sub
+	r = 232
+	g = 163
+	b = 23
+	bas[0].Split(",", rgb)
+	if rgb.Size >= 3 then
+		r = CInt(rgb[0])
+		g = CInt(rgb[1])
+		b = CInt(rgb[2])
+	end if
+	atakPanel.FindSubContainer("AP_BASLIK").Geometry.Text = bas[1]
+	atakPanel.FindSubContainer("AP_OYUNCULAR").Geometry.Text = bas[2]
+	Boya(atakPanel.FindSubContainer("AP_SERIT"), r, g, b, 100.0)
+	for i = 0 to aF.UBound
+		Boya(aFGovde[i], r, g, b, 100.0)
+		if Koyu(r, g, b) then
+			Boya(aFHalka[i], 10, 12, 16, 85.0)
+			Boya(aFNo[i], 17, 17, 17, 100.0)
+		else
+			Boya(aFHalka[i], 255, 255, 255, 95.0)
+			Boya(aFNo[i], 255, 255, 255, 100.0)
+		end if
+	next
+
+	cSay = 0
+	nSay = 0
+	fSay = 0
+	panelT0 = -1.0
+	topBasX = 0.0
+	topBasY = 0.0
+	bas[3].Split(";", oge)
+	for i = 0 to oge.UBound
+		oge[i].Split(",", al)
+		if al.Size >= 2 then
+			if al[0] = "C" and al.Size >= 10 and cSay <= aC.UBound then
+				cT0[cSay] = CDbl(al[1])
+				cDur[cSay] = CDbl(al[2])
+				if cDur[cSay] < 0.01 then cDur[cSay] = 0.01
+				cSx[cSay] = CDbl(al[3])
+				cSy[cSay] = CDbl(al[4])
+				cDx[cSay] = CDbl(al[5])
+				cDy[cSay] = CDbl(al[6])
+				cLen[cSay] = CDbl(al[7])
+				cKal[cSay] = CDbl(al[9])
+				aC[cSay].Rotation.xyz = CVertex(0.0, 0.0, CDbl(al[8]))
+				cSay = cSay + 1
+			elseif al[0] = "N" and al.Size >= 4 and nSay <= aN.UBound then
+				nT0[nSay] = CDbl(al[1])
+				aN[nSay].Position.xyz = CVertex(CDbl(al[2]), CDbl(al[3]), 0.05)
+				if nSay = 0 then
+					topBasX = CDbl(al[2])
+					topBasY = CDbl(al[3])
+				end if
+				nSay = nSay + 1
+			elseif al[0] = "F" and al.Size >= 5 and fSay <= aF.UBound then
+				fT0[fSay] = CDbl(al[1])
+				aF[fSay].Position.xyz = CVertex(CDbl(al[2]), CDbl(al[3]), 0.1)
+				aFNo[fSay].Geometry.Text = al[4]
+				if aFAd[fSay] <> null then
+					if al.Size >= 6 then
+						aFAd[fSay].Geometry.Text = al[5]
+						aFAd[fSay].Active = (al[5] <> "")
+						aFAdArka[fSay].Active = (al[5] <> "")
+					else
+						aFAd[fSay].Active = false
+						aFAdArka[fSay].Active = false
+					end if
+				end if
+				fSay = fSay + 1
+			elseif al[0] = "P" then
+				panelT0 = CDbl(al[1])
+			end if
+		end if
+	next
+	atakBas = Saat()
+	atak.Active = true
+	atakAktif = true
+end sub
+
+' Her karede: çizgiler baştan sona uzar, noktalar ve formalar zamanı gelince belirir, top en son çizginin ucundadır
+sub AtakCiz()
+	dim t, u, bx, by, k as Double
+	dim i as Integer
+	t = Saat() - atakBas
+	bx = topBasX
+	by = topBasY
+	for i = 0 to cSay - 1
+		u = (t - cT0[i]) / cDur[i]
+		if u <= 0.0 then
+			aC[i].Active = false
+		else
+			if u > 1.0 then u = 1.0
+			aC[i].Active = true
+			aC[i].Position.xyz = CVertex(cSx[i] + cDx[i] * u * 0.5, cSy[i] + cDy[i] * u * 0.5, 0.0)
+			aC[i].Scaling.xyz = CVertex(cLen[i] * u + 0.001, cKal[i], 1.0)
+			bx = cSx[i] + cDx[i] * u
+			by = cSy[i] + cDy[i] * u
+		end if
+	next
+	for i = 0 to nSay - 1
+		aN[i].Active = (t >= nT0[i])
+	next
+	for i = 0 to fSay - 1
+		if t < fT0[i] then
+			aF[i].Active = false
+		else
+			k = (t - fT0[i]) / 0.22
+			if k > 1.0 then k = 1.0
+			k = k * (2.0 - k)
+			aF[i].Active = true
+			aF[i].Scaling.xyz = CVertex(k, k, 1.0)
+		end if
+	next
+	aTop.Active = (nSay > 0)
+	aTop.Position.xyz = CVertex(bx, by, 0.2)
+	atakPanel.Active = (panelT0 >= 0.0 and t >= panelT0)
 end sub
